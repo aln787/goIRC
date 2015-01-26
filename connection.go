@@ -27,13 +27,17 @@ type User struct {
 }
 
 func (u *User) getHead() string {
-	//return fmt.Sprintf(":%s!%s@%s", u.Nick, u.Ident, u.Host)
-	return fmt.Sprintf(":%s!%s@127.0.0.1", u.Nick, u.Ident)
+	return fmt.Sprintf(":%s!%s@%v", u.Nick, u.Ident, u.Host)
+	//return fmt.Sprintf(":%s!%s@127.0.0.1", u.Nick, u.Ident)
 }
 
 func handleConnection(conn net.Conn, buses map[string]*EventBus) {
 	client := User{Status: UserPassSent, Conn: conn}
 	//myIP := net.Conn.RemoteAddr().String()
+	remoteA := fmt.Sprintf("%v", conn.RemoteAddr())
+	localA := conn.LocalAddr()
+	fmt.Printf("Remote Address: %v\nLocal Address: %v\n", remoteA, localA)
+
 	reader := bufio.NewReader(conn)
 
 	commands := make(map[string]func(map[string]*EventBus, *User, string, string))
@@ -85,6 +89,7 @@ func handleConnection(conn net.Conn, buses map[string]*EventBus) {
 					client.RealName = rname
 					client.Status = UserRegistered
 					client.Ident = client.Nick
+					client.Host = remoteA
 					fmt.Println("username:" + client.Ident)
 					buses[client.Nick] = &EventBus{subscribers: make(map[EventType][]Subscriber), channel: nil}
 					buses[client.Nick].Subscribe(PrivMsg, &client)
@@ -93,6 +98,7 @@ func handleConnection(conn net.Conn, buses map[string]*EventBus) {
 					client.Nick = regCmd[1]
 					client.Ident = regCmd[1]
 					client.RealName = regCmd[1]
+					client.Host = remoteA
 
 					buses[client.Nick] = &EventBus{subscribers: make(map[EventType][]Subscriber), channel: nil}
 					buses[client.Nick].Subscribe(PrivMsg, &client)
