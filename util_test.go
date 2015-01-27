@@ -51,3 +51,19 @@ func BuildUser() User {
 
 	return client
 }
+
+func BuildChannelAndBus() map[string]*EventBus {
+	buses := make(map[string]*EventBus)
+
+	chanName := "#gophers"
+	newChannel := Channel{name: chanName, topic: "gogo new channel!", mode: make(map[string]Mode)}
+	buses[newChannel.name] = &EventBus{subscribers: make(map[EventType][]Subscriber), channel: &newChannel}
+
+	return buses
+}
+
+func BuildChannel() Channel {
+	chanName := "#gophers"
+	newChannel := Channel{name: chanName, topic: "gogo new channel!", mode: make(map[string]Mode)}
+	return newChannel
+}

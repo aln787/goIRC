@@ -260,7 +260,6 @@ func handleMsg(buses map[string]*EventBus, client *User, target string, data str
 	buses[target].Publish(&Event{event_type: PrivMsg, event_data: message})
 }
 
-//func handleList(conn net.Conn, buses map[string]*EventBus) {
 func handleList(buses map[string]*EventBus, client *User, target string, data string) {
 	if len(buses) == 0 {
 		client.Write("No Channels Exist")

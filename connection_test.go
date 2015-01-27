@@ -5,6 +5,11 @@ import (
 	"testing"
 )
 
+func TestHandlePing(t *testing.T) {
+	//func handlePing(buses map[string]*EventBus, client *User, target string, data string) {
+
+}
+
 func TestGetHead(t *testing.T) {
 	client := BuildUser()
 
