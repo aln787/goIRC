@@ -1,106 +1,63 @@
 package main
 
-// import (
-// 	"net"
-// 	"sync"
-// 	"testing"
-// )
+import (
+	"testing"
+)
 
-// func handleNick(buses map[string]*EventBus, client *User, target string, data string) {
-// 	client.Nick = target
-// 	client.Conn.Write([]byte("nick set to:" + client.Nick + "\n"))
-// }
+func TestHandleNick(t *testing.T) {
+	futureNick := "afuturenickname"
+	client := BuildUser()
+	handleNick(nil, &client, futureNick, "")
 
-// func TestHandleNick(t *testing.T) {
-// 	nick := "randomNick"
+	if client.Nick != futureNick {
+		t.Errorf("client.Nick should be %q but is %q", futureNick, client.Nick)
+	}
+}
 
-// 	wasWritten := false
-// 	client := User{Nick: "anotherNick"}
-// 	newDualStackServer([]net.Listener)
-// 	client.Conn.Write = func(b []byte) (int, error) { wasWritten = true; return 0, nil }
+func TestIsChannel(t *testing.T) {
+	aChannel := "#gophers"
+	notAChannel := "gophers"
 
-// 	handleNick(nil, &client, nick, "")
+	if isChannel(aChannel) != true {
+		t.Errorf("%q is not a valid channel according to isChannel(), it is.", aChannel)
+	}
 
-// 	if client.Nick != nick {
-// 		t.Error("nick did not change")
-// 	}
+	if isChannel(notAChannel) == true {
+		t.Errorf("%q is a valid channel according to isChannel(), it isn't.", notAChannel)
+	}
+}
 
-// }
+func TestCheckEventBus(t *testing.T) {
+	client := BuildUser()
+	buses := make(map[string]*EventBus)
+	key := "#gophers"
+	randomKey := "#gjfkldfjglfdgfd"
 
-// ///////////////////////////////////
-// ///////MOCK SERVER STUFFS//////////
+	buses[key] = &EventBus{}
 
-// type streamListener struct {
-// 	net, addr string
-// 	ln        net.Listener
-// }
+	if checkEventBus(buses, &client, key) != true {
+		t.Errorf("checkEventBus states %q does not exist. It does.", key)
+	}
 
-// type dualStackServer struct {
-// 	lnmu sync.RWMutex
-// 	lns  []streamListener
-// 	port string
+	if checkEventBus(buses, &client, randomKey) == true {
+		t.Errorf("checkEventBus states %q does exist, it doesn't.", randomKey)
+	}
+}
 
-// 	cmu sync.RWMutex
-// 	cs  []net.Conn // established connections at the passive open side
-// }
+func TestCheckSubscribe(t *testing.T) {
+	client := BuildUser()
+	chanName := "#gophers"
+	newChannel := Channel{name: chanName, topic: "gogo new channel!", mode: make(map[string]Mode)}
+	buses := make(map[string]*EventBus)
+	buses[newChannel.name] = &EventBus{subscribers: make(map[EventType][]Subscriber), channel: &newChannel}
+	buses[newChannel.name].Subscribe(UserJoin, &client)
+	checkSubscribed(buses[newChannel.name], &client, UserJoin)
 
-// func (dss *dualStackServer) buildup(server func(*dualStackServer, net.Listener)) error {
-// 	for i := range dss.lns {
-// 		go server(dss, dss.lns[i].ln)
-// 	}
-// 	return nil
-// }
+	if checkSubscribed(buses[newChannel.name], &client, UserJoin) != true {
+		t.Errorf("checkSubscribed says %q isn't subscribed to %q, it is.", client.Nick, newChannel.name)
+	}
 
-// func (dss *dualStackServer) putConn(c net.Conn) error {
-// 	dss.cmu.Lock()
-// 	dss.cs = append(dss.cs, c)
-// 	dss.cmu.Unlock()
-// 	return nil
-// }
-
-// func (dss *dualStackServer) teardownNetwork(net string) error {
-// 	dss.lnmu.Lock()
-// 	for i := range dss.lns {
-// 		if net == dss.lns[i].net && dss.lns[i].ln != nil {
-// 			dss.lns[i].ln.Close()
-// 			dss.lns[i].ln = nil
-// 		}
-// 	}
-// 	dss.lnmu.Unlock()
-// 	return nil
-// }
-
-// func (dss *dualStackServer) teardown() error {
-// 	dss.lnmu.Lock()
-// 	for i := range dss.lns {
-// 		if dss.lns[i].ln != nil {
-// 			dss.lns[i].ln.Close()
-// 		}
-// 	}
-// 	dss.lnmu.Unlock()
-// 	dss.cmu.Lock()
-// 	for _, c := range dss.cs {
-// 		c.Close()
-// 	}
-// 	dss.cmu.Unlock()
-// 	return nil
-// }
-
-// func newDualStackServer(lns []streamListener) (*dualStackServer, error) {
-// 	dss := &dualStackServer{lns: lns, port: "0"}
-// 	for i := range dss.lns {
-// 		ln, err := net.Listen(dss.lns[i].net, dss.lns[i].addr+":"+dss.port)
-// 		if err != nil {
-// 			dss.teardown()
-// 			return nil, err
-// 		}
-// 		dss.lns[i].ln = ln
-// 		if dss.port == "0" {
-// 			if _, dss.port, err = net.SplitHostPort(ln.Addr().String()); err != nil {
-// 				dss.teardown()
-// 				return nil, err
-// 			}
-// 		}
-// 	}
-// 	return dss, nil
-// }
+	if checkSubscribed(buses[newChannel.name], &client, UserPart) == true {
+		t.Errorf("checkSubscribed says %q is subscribed, but it is not.", client.Nick)
+	}
+}
