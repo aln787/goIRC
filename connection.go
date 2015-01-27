@@ -131,8 +131,8 @@ func checkEventBus(buses map[string]*EventBus, client *User, target string) bool
 }
 
 //test added
-func checkSubscribed(bus *EventBus, client *User, event_type EventType) bool {
-	for _, v := range bus.subscribers[event_type] {
+func checkSubscribed(bus *EventBus, client *User, eventType EventType) bool {
+	for _, v := range bus.subscribers[eventType] {
 		if v == client {
 			return true
 		}
@@ -148,14 +148,14 @@ func isChannel(target string) bool {
 //test added
 func handlePart(buses map[string]*EventBus, client *User, target string, data string) {
 	message := fmt.Sprintf("%s parted %s!\n", client.Nick, target)
-	ok := checkEventBus(buses, client, target)
-	if !ok {
+
+	if ok := checkEventBus(buses, client, target); !ok {
 		return
 	}
-	if ok = checkSubscribed(buses[target], client, UserPart); !ok {
+	if ok := checkSubscribed(buses[target], client, UserPart); !ok {
 		return
 	}
-	buses[target].Publish(&Event{event_type: UserPart, event_data: message})
+	buses[target].Publish(&Event{eventType: UserPart, event_data: message})
 	delete(buses[target].channel.mode, client.Nick)
 
 	buses[target].Unsubscribe(UserPart, client)
@@ -169,8 +169,9 @@ func handlePart(buses map[string]*EventBus, client *User, target string, data st
 	}
 }
 
+//test added - but it fails
 func handlePing(buses map[string]*EventBus, client *User, target string, data string) {
-	client.Write("PONG " + target)
+	client.Write("PONG :" + target)
 }
 
 func handlePong(buses map[string]*EventBus, client *User, target string, data string) {
@@ -183,15 +184,16 @@ func handleJoin(buses map[string]*EventBus, client *User, target string, data st
 		return
 	}
 	var b *EventBus
-	ok := checkEventBus(buses, client, target)
-	if !ok {
+
+	if ok := checkEventBus(buses, client, target); !ok {
 		newChannel := Channel{name: target, topic: "gogo new channel!", mode: make(map[string]Mode)}
 		buses[newChannel.name] = &EventBus{subscribers: make(map[EventType][]Subscriber), channel: &newChannel}
 		b = buses[newChannel.name]
 	} else {
 		b = buses[target]
 	}
-	if ok = checkSubscribed(b, client, UserJoin); !ok {
+
+	if ok := checkSubscribed(b, client, UserJoin); !ok {
 		b.channel.mode[client.Nick] = Voice
 		b.Subscribe(UserJoin, client)
 		b.Subscribe(UserPart, client)
@@ -215,11 +217,11 @@ func handleJoin(buses map[string]*EventBus, client *User, target string, data st
 }
 
 func handleTopic(buses map[string]*EventBus, client *User, target string, data string) {
-	ok := checkEventBus(buses, client, target)
-	if !ok {
+
+	if ok := checkEventBus(buses, client, target); !ok {
 		return
 	}
-	if ok = checkSubscribed(buses[target], client, Topic); !ok {
+	if ok := checkSubscribed(buses[target], client, Topic); !ok {
 		return
 	}
 
@@ -244,20 +246,19 @@ func handleNick(buses map[string]*EventBus, client *User, target string, data st
 }
 
 func handleMsg(buses map[string]*EventBus, client *User, target string, data string) {
-	ok := checkEventBus(buses, client, target)
-	if !ok {
+	if ok := checkEventBus(buses, client, target); !ok {
 		return
 	}
 	if !isChannel(target) {
 		message := fmt.Sprintf("%s PRIVMSG %s: %s\n", client.GetHead(), target, data)
-		buses[target].Publish(&Event{event_type: PrivMsg, event_data: message})
-		buses[client.Nick].Publish(&Event{event_type: PrivMsg, event_data: message})
+		buses[target].Publish(&Event{eventType: PrivMsg, event_data: message})
+		buses[client.Nick].Publish(&Event{eventType: PrivMsg, event_data: message})
 	}
-	if ok = checkSubscribed(buses[target], client, PrivMsg); !ok {
+	if ok := checkSubscribed(buses[target], client, PrivMsg); !ok {
 		return
 	}
 	message := fmt.Sprintf("%s PRIVMSG %s: %s\n", client.GetHead(), target, data)
-	buses[target].Publish(&Event{event_type: PrivMsg, event_data: message})
+	buses[target].Publish(&Event{eventType: PrivMsg, event_data: message})
 }
 
 func handleList(buses map[string]*EventBus, client *User, target string, data string) {

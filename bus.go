@@ -34,7 +34,7 @@ type EventBus struct {
 }
 
 type Event struct {
-	event_type EventType
+	eventType  EventType
 	event_data string
 }
 
@@ -44,8 +44,8 @@ type Channel struct {
 	mode  map[string]Mode
 }
 
-func (b *EventBus) GetSubscribers(event_type EventType) []Subscriber {
-	return b.subscribers[event_type]
+func (b *EventBus) GetSubscribers(eventType EventType) []Subscriber {
+	return b.subscribers[eventType]
 }
 
 func (u *User) GetInfo() string {
@@ -67,9 +67,9 @@ func (u *User) WriteLines(lines []string) {
 }
 
 func (u *User) OnEvent(event *Event) {
-	switch event.event_type {
+	switch event.eventType {
 	case UserJoin:
-		//fmt.Printf("%q(%d)> %q\n", s.Nick, event.event_type, event.event_data)
+		//fmt.Printf("%q(%d)> %q\n", s.Nick, event.eventType, event.event_data)
 		_, err := u.Conn.Write([]byte(event.event_data))
 		if err != nil {
 			fmt.Println("Not looking too good")
@@ -89,22 +89,22 @@ func (u *User) OnEvent(event *Event) {
 	}
 }
 func (bus *EventBus) Publish(event *Event) {
-	fmt.Printf("\npublishing -%d- data: %q\n", event.event_type, event.event_data)
-	for _, subscriber := range bus.subscribers[event.event_type] {
+	fmt.Printf("\npublishing -%d- data: %q\n", event.eventType, event.event_data)
+	for _, subscriber := range bus.subscribers[event.eventType] {
 		go subscriber.OnEvent(event) //currently slower than without the goroutine
 	}
 	fmt.Println("done publishing")
 }
 
-func (bus *EventBus) Subscribe(event_type EventType, subscriber Subscriber) {
-	bus.subscribers[event_type] = append(bus.subscribers[event_type], subscriber)
+func (bus *EventBus) Subscribe(eventType EventType, subscriber Subscriber) {
+	bus.subscribers[eventType] = append(bus.subscribers[eventType], subscriber)
 }
 
-func (bus *EventBus) Unsubscribe(event_type EventType, subscriber Subscriber) {
+func (bus *EventBus) Unsubscribe(eventType EventType, subscriber Subscriber) {
 	//find the index
 	i := -1
 
-	for index, val := range bus.subscribers[event_type] {
+	for index, val := range bus.subscribers[eventType] {
 		if val.GetInfo() == subscriber.GetInfo() {
 			i = index
 			break
@@ -112,12 +112,12 @@ func (bus *EventBus) Unsubscribe(event_type EventType, subscriber Subscriber) {
 	}
 
 	if i > -1 { //we found someone
-		cur := bus.subscribers[event_type]
+		cur := bus.subscribers[eventType]
 		endIndex := i + 1 //will break if index is last element!
 		cur = append(cur[0:i], cur[endIndex:]...)
 
 		bus.Lock() //lock the eventbus while we remove the subscriber from the array
-		bus.subscribers[event_type] = cur
+		bus.subscribers[eventType] = cur
 		bus.Unlock()
 	}
 
