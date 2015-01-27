@@ -44,6 +44,10 @@ type Channel struct {
 	mode  map[string]Mode
 }
 
+func (b *EventBus) GetSubscribers(event_type EventType) []Subscriber {
+	return b.subscribers[event_type]
+}
+
 func (u *User) GetInfo() string {
 	return u.Nick
 }
