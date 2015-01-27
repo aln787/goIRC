@@ -17,6 +17,28 @@ func TestGetHead(t *testing.T) {
 	}
 }
 
+//this test needs to be fixed, it currently accomadates the
+//client.Ident = client.Nick hack in connection.go
+func TestHandleUser(t *testing.T) {
+	client := BuildUser()
+	client.Status = UserNickSent
+	testIdent := "abc123"
+
+	buses := make(map[string]*EventBus)
+	handleUser(buses, &client, "", "abc abc abc :hello")
+
+	if client.Status != UserRegistered && client.Ident != client.Nick {
+		t.Errorf("user failed to register.")
+	}
+
+	client.Status = UserRegistered
+	handleUser(buses, &client, "", "fdsfds fdsfds fdsfds :fdsfds")
+
+	if client.Ident != client.Nick {
+		t.Errorf("ident should not have changed. it was %q, now it is %q.", testIdent, client.Ident)
+	}
+}
+
 func TestHandleNick(t *testing.T) {
 	futureNick := "afuturenickname"
 	client := BuildUser()
@@ -92,7 +114,7 @@ func TestCheckEventBus(t *testing.T) {
 	}
 
 	if checkEventBus(buses, &client, randomKey) == true {
-		t.Errorf("checkEventBus states %q does exist, it doesn't.", randomKey)
+		t.Errorf("checkEventBus states %q does exist, it shouldn't", randomKey)
 	}
 }
 

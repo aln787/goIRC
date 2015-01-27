@@ -39,6 +39,7 @@ func handleConnection(conn net.Conn, buses map[string]*EventBus) {
 	//myIP := net.Conn.RemoteAddr().String()
 	remoteA := fmt.Sprintf("%v", conn.RemoteAddr())
 	localA := conn.LocalAddr()
+	client.Host = remoteA
 	fmt.Printf("Remote Address: %v\nLocal Address: %v\n", remoteA, localA)
 
 	reader := bufio.NewReader(conn)
@@ -53,6 +54,7 @@ func handleConnection(conn net.Conn, buses map[string]*EventBus) {
 	commands["LIST"] = handleList
 	commands["PING"] = handlePing
 	commands["PONG"] = handlePong
+	commands["USER"] = handleUser
 
 	for {
 		status, err := reader.ReadString('\n')
@@ -79,24 +81,6 @@ func handleConnection(conn net.Conn, buses map[string]*EventBus) {
 				regCmd[0] = strings.ToUpper(regCmd[0])
 				fmt.Println("-" + regCmd[0] + "-" + regCmd[1])
 				switch regCmd[0] {
-				case "NICK":
-					//client.Nick = regCmd[1]
-					handleNick(buses, &client, regCmd[1], "")
-					client.Status = UserNickSent
-				case "USER":
-					fmt.Println("hit user case")
-					var uname, hname, sname, rname string
-					fmt.Sscanf(regCmd[1], "%s %s %s :%s", uname, hname, sname, rname) //TODO(jz) need to split on : in case real name has spaces
-					fmt.Println(hname + uname)
-					//client.Ident = uname
-					client.RealName = rname
-					client.Status = UserRegistered
-					client.Ident = client.Nick
-					client.Host = remoteA
-					fmt.Println("username:" + client.Ident)
-					buses[client.Nick] = &EventBus{subscribers: make(map[EventType][]Subscriber), channel: nil}
-					buses[client.Nick].Subscribe(PrivMsg, &client)
-					sendWelcome(&client)
 				case "PASS": //need to remove this at some point!
 					client.Nick = regCmd[1]
 					client.Ident = regCmd[1]
@@ -161,6 +145,7 @@ func isChannel(target string) bool {
 	return string(target[0]) == "#"
 }
 
+//test added
 func handlePart(buses map[string]*EventBus, client *User, target string, data string) {
 	message := fmt.Sprintf("%s parted %s!\n", client.Nick, target)
 	ok := checkEventBus(buses, client, target)
@@ -289,6 +274,26 @@ func handleList(buses map[string]*EventBus, client *User, target string, data st
 		client.Conn.Write([]byte("End of List\n"))
 		//client.Write(k)
 	}
+}
+
+//test added, but FIX PARSING SO WE ACTUALLY GET IDENT
+func handleUser(buses map[string]*EventBus, client *User, target string, data string) {
+	if client.Status != UserNickSent {
+		//write an error to client, stating already registered
+		return
+	}
+
+	fmt.Println("hit user case")
+	var uname, hname, sname, rname string
+	fmt.Sscanf(data, "%s %s %s :%s", uname, hname, sname, rname)
+	fmt.Println(hname + uname)
+	client.RealName = rname
+	client.Status = UserRegistered
+	client.Ident = client.Nick //terrible hack. fixme!
+	fmt.Println("username:" + client.Ident)
+	buses[client.Nick] = &EventBus{subscribers: make(map[EventType][]Subscriber), channel: nil}
+	buses[client.Nick].Subscribe(PrivMsg, client)
+	sendWelcome(client)
 }
 
 func handleHelp(buses map[string]*EventBus, client *User, target string, data string) {
