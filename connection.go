@@ -26,16 +26,20 @@ type User struct {
 	Host     string
 }
 
-func (u *User) getHead() string {
+//test added
+func (u *User) GetHead() string {
 	return fmt.Sprintf(":%s!%s@%v", u.Nick, u.Ident, u.Host)
 	//return fmt.Sprintf(":%s!%s@127.0.0.1", u.Nick, u.Ident)
 }
 
 func handleConnection(conn net.Conn, buses map[string]*EventBus) {
+	defer conn.Close()
+
 	client := User{Status: UserPassSent, Conn: conn}
 	//myIP := net.Conn.RemoteAddr().String()
 	remoteA := fmt.Sprintf("%v", conn.RemoteAddr())
 	localA := conn.LocalAddr()
+	client.Host = remoteA
 	fmt.Printf("Remote Address: %v\nLocal Address: %v\n", remoteA, localA)
 
 	reader := bufio.NewReader(conn)
@@ -50,6 +54,7 @@ func handleConnection(conn net.Conn, buses map[string]*EventBus) {
 	commands["LIST"] = handleList
 	commands["PING"] = handlePing
 	commands["PONG"] = handlePong
+	commands["USER"] = handleUser
 
 	for {
 		status, err := reader.ReadString('\n')
@@ -76,24 +81,6 @@ func handleConnection(conn net.Conn, buses map[string]*EventBus) {
 				regCmd[0] = strings.ToUpper(regCmd[0])
 				fmt.Println("-" + regCmd[0] + "-" + regCmd[1])
 				switch regCmd[0] {
-				case "NICK":
-					//client.Nick = regCmd[1]
-					handleNick(buses, &client, regCmd[1], "")
-					client.Status = UserNickSent
-				case "USER":
-					fmt.Println("hit user case")
-					var uname, hname, sname, rname string
-					fmt.Sscanf(regCmd[1], "%s %s %s :%s", uname, hname, sname, rname) //TODO(jz) need to split on : in case real name has spaces
-					fmt.Println(hname + uname)
-					//client.Ident = uname
-					client.RealName = rname
-					client.Status = UserRegistered
-					client.Ident = client.Nick
-					client.Host = remoteA
-					fmt.Println("username:" + client.Ident)
-					buses[client.Nick] = &EventBus{subscribers: make(map[EventType][]Subscriber), channel: nil}
-					buses[client.Nick].Subscribe(PrivMsg, &client)
-					sendWelcome(&client)
 				case "PASS": //need to remove this at some point!
 					client.Nick = regCmd[1]
 					client.Ident = regCmd[1]
@@ -134,49 +121,57 @@ func handleConnection(conn net.Conn, buses map[string]*EventBus) {
 	}
 }
 
-func checkEventBus(buses map[string]*EventBus, client *User, target string) (*EventBus, bool) {
-	b, ok := buses[target]
+//test added, removed return param of the actual bus it appeared unneeded
+func checkEventBus(buses map[string]*EventBus, client *User, target string) bool {
+	_, ok := buses[target]
 	if !ok {
 		client.Write(fmt.Sprintf(canned_responses[ERR_NOSUCHCHANNEL], client.Nick))
 	}
-	return b, ok
+	return ok
 }
-func checkSubscribed(bus *EventBus, client *User, event_type EventType) bool {
-	for _, v := range bus.subscribers[event_type] {
+
+//test added
+func checkSubscribed(bus *EventBus, client *User, eventType EventType) bool {
+	for _, v := range bus.subscribers[eventType] {
 		if v == client {
 			return true
 		}
 	}
 	return false
 }
+
+//test added
 func isChannel(target string) bool {
 	return string(target[0]) == "#"
 }
+
+//test added
 func handlePart(buses map[string]*EventBus, client *User, target string, data string) {
 	message := fmt.Sprintf("%s parted %s!\n", client.Nick, target)
-	b, ok := checkEventBus(buses, client, target)
-	if !ok {
+
+	if ok := checkEventBus(buses, client, target); !ok {
 		return
 	}
-	if ok = checkSubscribed(b, client, UserPart); !ok {
+	if ok := checkSubscribed(buses[target], client, UserPart); !ok {
 		return
 	}
-	buses[target].Publish(&Event{event_type: UserPart, event_data: message})
-	delete(b.channel.mode, client.Nick)
+	buses[target].Publish(&Event{eventType: UserPart, event_data: message})
+	delete(buses[target].channel.mode, client.Nick)
 
 	buses[target].Unsubscribe(UserPart, client)
 	buses[target].Unsubscribe(UserJoin, client)
 	buses[target].Unsubscribe(Topic, client)
 	buses[target].Unsubscribe(PrivMsg, client)
 	// possibile race condition
-	if len(b.channel.mode) == 0 {
+	if len(buses[target].GetSubscribers(PrivMsg)) == 0 {
 		delete(buses, target)
 		fmt.Println(target + " closed")
 	}
 }
 
+//test added - but it fails
 func handlePing(buses map[string]*EventBus, client *User, target string, data string) {
-	client.Write("PONG " + target)
+	client.Write("PONG :" + target)
 }
 
 func handlePong(buses map[string]*EventBus, client *User, target string, data string) {
@@ -188,20 +183,24 @@ func handleJoin(buses map[string]*EventBus, client *User, target string, data st
 	if !isChannel(target) {
 		return
 	}
-	b, ok := checkEventBus(buses, client, target)
-	if !ok {
+	var b *EventBus
+
+	if ok := checkEventBus(buses, client, target); !ok {
 		newChannel := Channel{name: target, topic: "gogo new channel!", mode: make(map[string]Mode)}
 		buses[newChannel.name] = &EventBus{subscribers: make(map[EventType][]Subscriber), channel: &newChannel}
 		b = buses[newChannel.name]
+	} else {
+		b = buses[target]
 	}
-	if ok = checkSubscribed(b, client, UserJoin); !ok {
+
+	if ok := checkSubscribed(b, client, UserJoin); !ok {
 		b.channel.mode[client.Nick] = Voice
 		b.Subscribe(UserJoin, client)
 		b.Subscribe(UserPart, client)
 		b.Subscribe(PrivMsg, client)
 		b.Subscribe(Topic, client)
 		//message := fmt.Sprintf("%s joined %s!\n", client.Nick, target)
-		message := fmt.Sprintf("%s JOIN %s\n", client.getHead(), target)
+		message := fmt.Sprintf("%s JOIN %s\n", client.GetHead(), target)
 		//send names
 		var names string
 		for _, val := range buses[target].subscribers[PrivMsg] {
@@ -218,47 +217,50 @@ func handleJoin(buses map[string]*EventBus, client *User, target string, data st
 }
 
 func handleTopic(buses map[string]*EventBus, client *User, target string, data string) {
-	b, ok := checkEventBus(buses, client, target)
-	if !ok {
+
+	if ok := checkEventBus(buses, client, target); !ok {
 		return
 	}
-	if ok = checkSubscribed(b, client, Topic); !ok {
+	if ok := checkSubscribed(buses[target], client, Topic); !ok {
 		return
 	}
 
 	if len(data) > 0 {
-		b.channel.topic = data
+		buses[target].channel.topic = data
 		message := fmt.Sprintf("%s changed the channel topic to %s", client.Nick, data)
-		b.Publish(&Event{Topic, message})
+		buses[target].Publish(&Event{Topic, message})
 	} else {
-		message := fmt.Sprintf("%s\n", b.channel.topic)
+		message := fmt.Sprintf("%s\n", buses[target].channel.topic)
 		client.Write(message)
 	}
 }
 
+//test added
 func handleNick(buses map[string]*EventBus, client *User, target string, data string) {
 	client.Nick = target
 	client.Write("nick set to:" + client.Nick)
+
+	if client.Status == UserPassSent {
+		client.Status = UserNickSent
+	}
 }
 
 func handleMsg(buses map[string]*EventBus, client *User, target string, data string) {
-	b, ok := checkEventBus(buses, client, target)
-	if !ok {
+	if ok := checkEventBus(buses, client, target); !ok {
 		return
 	}
 	if !isChannel(target) {
-		message := fmt.Sprintf("%s PRIVMSG %s: %s\n", client.getHead(), target, data)
-		b.Publish(&Event{event_type: PrivMsg, event_data: message})
-		buses[client.Nick].Publish(&Event{event_type: PrivMsg, event_data: message})
+		message := fmt.Sprintf("%s PRIVMSG %s: %s\n", client.GetHead(), target, data)
+		buses[target].Publish(&Event{eventType: PrivMsg, event_data: message})
+		buses[client.Nick].Publish(&Event{eventType: PrivMsg, event_data: message})
 	}
-	if ok = checkSubscribed(b, client, PrivMsg); !ok {
+	if ok := checkSubscribed(buses[target], client, PrivMsg); !ok {
 		return
 	}
-	message := fmt.Sprintf("%s PRIVMSG %s: %s\n", client.getHead(), target, data)
-	b.Publish(&Event{event_type: PrivMsg, event_data: message})
+	message := fmt.Sprintf("%s PRIVMSG %s: %s\n", client.GetHead(), target, data)
+	buses[target].Publish(&Event{eventType: PrivMsg, event_data: message})
 }
 
-//func handleList(conn net.Conn, buses map[string]*EventBus) {
 func handleList(buses map[string]*EventBus, client *User, target string, data string) {
 	if len(buses) == 0 {
 		client.Write("No Channels Exist")
@@ -272,6 +274,26 @@ func handleList(buses map[string]*EventBus, client *User, target string, data st
 		client.Conn.Write([]byte("End of List\n"))
 		//client.Write(k)
 	}
+}
+
+//test added, but FIX PARSING SO WE ACTUALLY GET IDENT
+func handleUser(buses map[string]*EventBus, client *User, target string, data string) {
+	if client.Status != UserNickSent {
+		//write an error to client, stating already registered
+		return
+	}
+
+	fmt.Println("hit user case")
+	var uname, hname, sname, rname string
+	fmt.Sscanf(data, "%s %s %s :%s", uname, hname, sname, rname)
+	fmt.Println(hname + uname)
+	client.RealName = rname
+	client.Status = UserRegistered
+	client.Ident = client.Nick //terrible hack. fixme!
+	fmt.Println("username:" + client.Ident)
+	buses[client.Nick] = &EventBus{subscribers: make(map[EventType][]Subscriber), channel: nil}
+	buses[client.Nick].Subscribe(PrivMsg, client)
+	sendWelcome(client)
 }
 
 func handleHelp(buses map[string]*EventBus, client *User, target string, data string) {
